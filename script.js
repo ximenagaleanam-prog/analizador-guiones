@@ -1,13 +1,14 @@
 document.addEventListener('DOMContentLoaded', () => {
     // =========================================================
-    // 1. CONFIGURACIÓN Y VARIABLES
+    // 1. CONFIGURACIÓN
     // =========================================================
-    // Detector automático de entorno
     const isLocalhost = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-    const BACKEND_ENDPOINT = isLocalhost ? '/api/analisis-ia' : '/api/analisis-ia';
+    // Ajuste dinámico de la URL para evitar errores 404
+    const BACKEND_ENDPOINT = '/api/analisis-ia';
 
-    console.log(`🚀 Sistema iniciado en modo: ${isLocalhost ? 'LOCAL' : 'PRODUCCIÓN'}`);
+    console.log(`🚀 Sistema iniciado. Endpoint: ${BACKEND_ENDPOINT}`);
 
+    // Referencias DOM
     const textoGuion = document.getElementById('texto-guion');
     const archivoGuion = document.getElementById('archivo-guion');
     const idiomaSelector = document.getElementById('idioma-analisis');
@@ -15,49 +16,33 @@ document.addEventListener('DOMContentLoaded', () => {
     const resultadosSection = document.getElementById('resultados');
     const listaPalabras = document.getElementById('lista-palabras');
     const listaPersonajes = document.getElementById('lista-personajes');
-    const listaOracionesClave = document.getElementById('lista-oraciones-clave');
-    const listaDialogosClave = document.getElementById('lista-dialogos-clave');
     const generarAnalisisEmocionalBtn = document.getElementById('generar-analisis-emocional-btn');
     const resultadoEmocional = document.getElementById('resultado-emocional');
 
     // =========================================================
-    // 2. LISTAS DE EXCLUSIÓN (STOPWORDS + JERGA CINE)
+    // 2. FILTROS INTELIGENTES (La clave para limpiar basura)
     // =========================================================
-    const technicalJargon = new Set([
-        'int', 'ext', 'int.', 'ext.', 'día', 'noche', 'day', 'night', 'dawn', 'dusk', 'amanecer',
-        'atardecer', 'continuous', 'continuo', 'cut to', 'fade in', 'fade out', 'dissolve to',
-        'v.o.', 'o.s.', 'cont', "cont'd", 'off', 'pan', 'tilt', 'zoom', 'cu', 'plano', 'cámara',
-        'silencio', 'pausa', 'beat', 'fin', 'title', 'credit'
-    ]);
-
-    const stopwords_es = new Set(['el', 'la', 'los', 'las', 'un', 'una', 'y', 'de', 'a', 'en', 'por', 'con', 'que', 'se', 'es', 'sus', 'mi', 'tu', 'su', 'al', 'del', 'lo', 'le', 'me', 'te', 'nos', 'si', 'no', 'pero', 'o', 'porque', 'cuando', 'donde', 'quien', 'como', 'muy', 'más', 'ese', 'este', 'eso', 'esto', 'hombre', 'mujer']);
-    const stopwords_en = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'of', 'to', 'in', 'on', 'at', 'with', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'my', 'your', 'his', 'our', 'their', 'if', 'not', 'is', 'are', 'was', 'were', 'that', 'this', 'what', 'when', 'where', 'who', 'how', 'man', 'woman']);
+    // Palabras comunes a ignorar en el conteo de temas
+    const stopwords_es = new Set(['el', 'la', 'los', 'las', 'un', 'una', 'y', 'de', 'a', 'en', 'por', 'con', 'que', 'se', 'es', 'sus', 'mi', 'tu', 'su', 'al', 'del', 'lo', 'le', 'me', 'te', 'nos', 'si', 'no', 'pero', 'o', 'porque', 'cuando', 'donde', 'quien', 'como', 'muy', 'más', 'ese', 'este', 'eso', 'esto', 'para', 'sin', 'sobre', 'era', 'fue', 'hay', 'vez', 'todo', 'nada']);
+    const stopwords_en = new Set(['the', 'a', 'an', 'and', 'or', 'but', 'of', 'to', 'in', 'on', 'at', 'with', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'my', 'your', 'his', 'our', 'their', 'if', 'not', 'is', 'are', 'was', 'were', 'that', 'this', 'what', 'when', 'where', 'who', 'how']);
 
     function getStopwords(idioma) {
-        const base = idioma === 'en' ? stopwords_en : stopwords_es;
-        // Unimos las palabras comunes con la jerga técnica
-        return new Set([...base, ...technicalJargon]);
+        return idioma === 'en' ? stopwords_en : stopwords_es;
     }
 
     // =========================================================
-    // 3. LIMPIEZA Y LECTURA DE ARCHIVOS (ROBUSTA)
+    // 3. CARGA DE ARCHIVOS ROBUSTA
     // =========================================================
     function limpiarTextoGuion(texto) {
-        let limpio = texto
-            .replace(/[\0\uFEFF\u200B-\u200D\u2060\u202F\u3000]/g, '') // Caracteres invisibles
+        return texto
+            .replace(/[\0\uFEFF\u200B-\u200D\u2060\u202F\u3000]/g, '')
             .replace(/\r\n|\r/g, '\n')
             .replace(/\t/g, ' ')
-            .replace(/[ ]{2,}/g, ' ') // Dobles espacios
+            .replace(/[ ]{2,}/g, ' ')
             .trim();
-
-        // Formateo visual simple para nombres de personajes pegados
-        limpio = limpio.replace(/([A-Z.]{3,})([^A-Z.\n])/g, (match, p1, p2) => {
-            return (p1.length > 3 && !p1.includes('.')) ? p1 + '\n' + p2 : match;
-        });
-        return limpio;
     }
 
-    // Función Promisificada para leer archivos (Soluciona el problema del DOCX)
+    // Función que lee TXT o DOCX
     function leerArchivoPromesa(file) {
         return new Promise((resolve, reject) => {
             const fileName = file.name.toLowerCase();
@@ -70,42 +55,37 @@ document.addEventListener('DOMContentLoaded', () => {
             }
             else if (fileName.endsWith('.docx')) {
                 if (typeof mammoth === 'undefined') {
-                    return reject("Librería Mammoth no encontrada. Revisa tu conexión.");
+                    return reject("Mammoth.js no cargó. Revisa tu internet.");
                 }
                 const reader = new FileReader();
                 reader.onload = (e) => {
                     mammoth.extractRawText({ arrayBuffer: e.target.result })
-                        .then(result => {
-                            if (!result.value.trim()) reject("El DOCX parece vacío o ilegible.");
-                            else resolve(result.value);
-                        })
-                        .catch(err => reject(`Error Mammoth: ${err.message}`));
+                        .then(result => resolve(result.value))
+                        .catch(err => reject(`Error DOCX: ${err.message}`));
                 };
                 reader.onerror = () => reject("Error leyendo binario DOCX");
                 reader.readAsArrayBuffer(file);
             }
             else {
-                reject("Formato no soportado (solo .txt o .docx)");
+                reject("Formato no soportado. Usa .txt o .docx");
             }
         });
     }
 
-    // Listener de carga de archivo optimizado
     archivoGuion.addEventListener('change', async (event) => {
         const file = event.target.files[0];
         if (!file) return;
 
-        textoGuion.value = "⏳ Procesando archivo... por favor espera.";
+        textoGuion.value = "⏳ Leyendo archivo...";
         textoGuion.disabled = true;
 
         try {
             const contenido = await leerArchivoPromesa(file);
             textoGuion.value = limpiarTextoGuion(contenido);
-            alert(`✅ Archivo "${file.name}" cargado correctamente.`);
+            // alert(`✅ Archivo cargado.`); // Opcional: quitar alerta para fluidez
         } catch (error) {
-            console.error(error);
-            textoGuion.value = "";
             alert(`❌ Error: ${error}`);
+            textoGuion.value = "";
         } finally {
             textoGuion.disabled = false;
             archivoGuion.value = '';
@@ -113,53 +93,55 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // =========================================================
-    // 4. LÓGICA DE ANÁLISIS CUANTITATIVO (PRESERVA TU LÓGICA)
+    // 4. ALGORITMO DE ANÁLISIS MEJORADO
     // =========================================================
     function analizarTextoGuion(texto, idioma) {
         const stopwords = getStopwords(idioma);
         const lineas = texto.split('\n');
 
-        const dialogosPorPersonaje = {};
         const frecuenciaPersonajes = {};
-        let personajeActual = null;
+        const frecuenciaPalabras = {};
         let textoTotalDialogos = '';
 
-        // -- Fase 1: Extracción de Personajes y Diálogos --
-        lineas.forEach((linea, index) => {
+        lineas.forEach((linea) => {
             const lineaTrim = linea.trim();
-            // Detectar Personaje: Mayúsculas, longitud > 2, sin números excesivos, no es jerga técnica
-            const posiblePersonaje = lineaTrim.toUpperCase() === lineaTrim && lineaTrim.length > 2 && !/\d/.test(lineaTrim);
-            const esJerga = technicalJargon.has(lineaTrim.toLowerCase().replace(/[:.]/g, ''));
+            if (lineaTrim.length < 2) return; // Ignorar líneas muy cortas
 
-            if (posiblePersonaje && !esJerga) {
-                personajeActual = lineaTrim.split('(')[0].trim(); // Quitar (V.O.)
-                frecuenciaPersonajes[personajeActual] = (frecuenciaPersonajes[personajeActual] || 0) + 1;
-                if (!dialogosPorPersonaje[personajeActual]) dialogosPorPersonaje[personajeActual] = [];
-            }
-            else if (personajeActual && lineaTrim.length > 0) {
-                // Es diálogo
-                let dialogoLimpio = lineaTrim.replace(/\([^)]*\)/g, '').trim(); // Quitar parentesis
-                if (dialogoLimpio) {
-                    dialogosPorPersonaje[personajeActual].push(dialogoLimpio);
-                    textoTotalDialogos += ' ' + dialogoLimpio;
+            // CRITERIOS ESTRICTOS PARA DETECTAR PERSONAJES
+            const esMayusculas = lineaTrim === lineaTrim.toUpperCase();
+            // Evitar encabezados de escena (INT. EXT. o que tengan guion de tiempo " - ")
+            const esEncabezado = /^(INT\.|EXT\.|I\/E|INT |EXT )/i.test(lineaTrim) || lineaTrim.includes(' - ');
+            const tieneNumeros = /\d/.test(lineaTrim); // Los personajes no suelen tener números (excepto R2-D2, pero es un trade-off)
+            const esTransicion = /^(CUT TO|FADE|DISSOLVE)/i.test(lineaTrim);
+            const esAcotacion = lineaTrim.startsWith('(') || lineaTrim.endsWith(')');
+
+            if (esMayusculas && !esEncabezado && !tieneNumeros && !esTransicion && !esAcotacion) {
+                // Limpieza final del nombre (quitar (V.O.), (CONT'D), espacios extra)
+                let nombreLimpio = lineaTrim
+                    .replace(/\(.*\)/g, '')  // Quitar paréntesis y contenido
+                    .replace(/[^A-ZÑÁÉÍÓÚÜ ]/g, '') // Quitar símbolos raros
+                    .trim();
+
+                if (nombreLimpio.length > 2 && !stopwords.has(nombreLimpio.toLowerCase())) {
+                    frecuenciaPersonajes[nombreLimpio] = (frecuenciaPersonajes[nombreLimpio] || 0) + 1;
                 }
             }
-            else if (lineaTrim === '') {
-                personajeActual = null;
+            else if (!esMayusculas && !esEncabezado) {
+                // Asumimos que es diálogo o acción, lo sumamos al saco de palabras
+                textoTotalDialogos += ' ' + lineaTrim;
             }
         });
 
-        // -- Fase 2: Top Personajes --
+        // -- Procesar Top Personajes --
         const topPersonajes = Object.entries(frecuenciaPersonajes)
             .sort(([, a], [, b]) => b - a)
             .slice(0, 5);
 
-        // -- Fase 3: Top Palabras (Filtrado mejorado) --
-        const frecuenciaPalabras = {};
+        // -- Procesar Palabras Clave --
         const palabras = textoTotalDialogos.toLowerCase()
-            .replace(/[.,/#!$%^&*;:{}=\-_`~()¡¿?"]/g, ' ') // Quitar puntuación
+            .replace(/[.,/#!$%^&*;:{}=\-_`~()¡¿?"\d]/g, ' ') // Quitar puntuación y números
             .split(/\s+/)
-            .filter(w => w.length > 3 && !stopwords.has(w)); // Filtrar stopwords y jerga
+            .filter(w => w.length > 3 && !stopwords.has(w)); // Filtrar stopwords
 
         palabras.forEach(w => frecuenciaPalabras[w] = (frecuenciaPalabras[w] || 0) + 1);
 
@@ -167,17 +149,15 @@ document.addEventListener('DOMContentLoaded', () => {
             .sort(([, a], [, b]) => b - a)
             .slice(0, 10);
 
-        return { topPersonajes, topPalabras, dialogosPorPersonaje };
+        return { topPersonajes, topPalabras };
     }
 
     function mostrarResultados(analisis) {
-        // Limpiar
         listaPalabras.innerHTML = '';
         listaPersonajes.innerHTML = '';
 
-        // Renderizar Personajes
         if (analisis.topPersonajes.length === 0) {
-            listaPersonajes.innerHTML = '<li>No se detectaron personajes claros. (Revisa el formato).</li>';
+            listaPersonajes.innerHTML = '<li>⚠️ No se detectaron personajes claros. Revisa el formato.</li>';
         } else {
             analisis.topPersonajes.forEach(([p, c]) => {
                 const li = document.createElement('li');
@@ -186,9 +166,8 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
 
-        // Renderizar Palabras
         if (analisis.topPalabras.length === 0) {
-            listaPalabras.innerHTML = '<li>No hay suficientes datos.</li>';
+            listaPalabras.innerHTML = '<li>Sin datos suficientes.</li>';
         } else {
             analisis.topPalabras.forEach(([w, c]) => {
                 const li = document.createElement('li');
@@ -199,14 +178,13 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // =========================================================
-    // 5. EVENTOS DE INTERFAZ
+    // 5. EVENTOS
     // =========================================================
 
-    // Botón Análisis Local
     analizarBtn.addEventListener('click', (e) => {
         e.preventDefault();
         const guion = textoGuion.value.trim();
-        if (!guion) return alert('Por favor, pega o sube un guion.');
+        if (!guion) return alert('Pega un guion primero.');
 
         const analisis = analizarTextoGuion(guion, idiomaSelector.value);
         mostrarResultados(analisis);
@@ -214,15 +192,13 @@ document.addEventListener('DOMContentLoaded', () => {
         resultadosSection.scrollIntoView({ behavior: 'smooth' });
     });
 
-    // Botón Análisis IA (Serverless)
     generarAnalisisEmocionalBtn.addEventListener('click', async () => {
         const guion = textoGuion.value.trim();
-        if (guion.length < 50) return alert('El guion es muy corto para la IA.');
+        if (guion.length < 50) return alert('El guion es muy corto.');
 
-        // Ejecutamos análisis local para enviar contexto a la IA
         const analisisCuantitativo = analizarTextoGuion(guion, idiomaSelector.value);
 
-        resultadoEmocional.innerHTML = '<p>🧠 Conectando con Groq (Mixtral-32k)... Analizando emociones ⏳</p>';
+        resultadoEmocional.innerHTML = '<p>🧠 Conectando con IA... Analizando emociones ⏳</p>';
         resultadoEmocional.scrollIntoView({ behavior: 'smooth' });
 
         try {
@@ -232,15 +208,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 body: JSON.stringify({ guion, analisisCuantitativo })
             });
 
+            // Primero verificamos si la respuesta es JSON válido
+            const contentType = response.headers.get("content-type");
+            if (!contentType || !contentType.includes("application/json")) {
+                throw new Error("El servidor devolvió un error HTML (posiblemente 404 o 500). Revisa tu configuración de Vercel.");
+            }
+
             const data = await response.json();
 
             if (response.ok) {
                 resultadoEmocional.innerHTML = `<div class="feedback-box">${data.analysis}</div>`;
             } else {
-                throw new Error(data.error || 'Error desconocido');
+                throw new Error(data.error || 'Error del servidor');
             }
         } catch (error) {
-            resultadoEmocional.innerHTML = `<p style="color:red; font-weight:bold;">🚨 Error de conexión: ${error.message}</p>`;
+            console.error(error);
+            resultadoEmocional.innerHTML = `<p style="color:#d9534f; font-weight:bold;">🚨 Error: ${error.message}</p>`;
         }
     });
 });

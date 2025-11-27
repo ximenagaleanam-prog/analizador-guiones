@@ -1,0 +1,7 @@
+# Ignorar dependencias pesadas
+node_modules/
+api/node_modules/
+
+# Ignorar archivos de sistema y claves
+.DS_Store
+.env

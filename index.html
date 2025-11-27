@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎬 Analizador de Guiones PRO</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+</head>
+<body>
+<header><h1>🎬 Analizador de Guiones & IA</h1></header>
+
+<main>
+    <section id="entrada">
+        <h2>1. Carga tu Guion</h2>
+        <div class="controles">
+            <input type="file" id="archivo-guion" accept=".txt, .docx">
+            <select id="idioma-analisis">
+                <option value="es">Español</option>
+                <option value="en">Inglés</option>
+            </select>
+            <button id="analizar-btn">📊 Estadísticas Rápidas</button>
+        </div>
+        <textarea id="texto-guion" rows="15" placeholder="El texto extraído aparecerá aquí..."></textarea>
+    </section>
+
+    <section id="resultados" style="display: none;">
+        <h2>2. Datos del Guion</h2>
+        <div class="contenedor-resultados">
+            <div class="columna">
+                <h3>👥 Personajes (+Activos)</h3>
+                <ul id="lista-personajes"></ul>
+            </div>
+            <div class="columna">
+                <h3>🔑 Temas (Palabras Clave)</h3>
+                <ul id="lista-palabras"></ul>
+            </div>
+        </div>
+    </section>
+
+    <section id="analisis-emocional">
+        <h2>3. 🤖 Script Doctor (IA)</h2>
+        <p>Usa Inteligencia Artificial para analizar el subtexto y las emociones.</p>
+        <button id="generar-analisis-emocional-btn">✨ Generar Análisis Profundo</button>
+        <div id="resultado-emocional" class="feedback-box">
+            <p>Esperando análisis...</p>
+        </div>
+    </section>
+</main>
+<script src="script.js"></script>
+</body>
+</html>

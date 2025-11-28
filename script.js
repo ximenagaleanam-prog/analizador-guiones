@@ -1,184 +1,188 @@
 document.addEventListener('DOMContentLoaded', () => {
-    console.log("✅ Script cargado correctamente."); // Mensaje para consola
-
-    // =========================================================
-    // 1. VARIABLES (Verificamos que existan)
-    // =========================================================
+    // REFERENCIAS DOM
+    const archivoInput = document.getElementById('archivo-guion');
     const textoGuion = document.getElementById('texto-guion');
     const analizarBtn = document.getElementById('analizar-btn');
     const resultadosSection = document.getElementById('resultados');
-    const generarAnalisisEmocionalBtn = document.getElementById('generar-analisis-emocional-btn');
-    const resultadoEmocional = document.getElementById('resultado-emocional');
     const idiomaSelector = document.getElementById('idioma-analisis');
+    const listaPersonajes = document.getElementById('lista-personajes');
+    const listaPalabras = document.getElementById('lista-palabras');
+    const listaEmociones = document.getElementById('lista-emociones');
 
-    // Verificación de seguridad
-    if (!analizarBtn || !textoGuion) {
-        alert("🚨 ERROR CRÍTICO: No encuentro el botón o la caja de texto en el HTML. Verifica los IDs.");
-        return;
-    }
+    // DICCIONARIO BÁSICO DE EMOCIONES (Español)
+    // Esto nos permite detectar el tono sin usar IA costosa
+    const diccionarioEmociones = {
+        'amor': '❤️', 'querer': '❤️', 'amar': '❤️', 'beso': '❤️', 'pasión': '❤️',
+        'muerte': '💀', 'matar': '💀', 'sangre': '💀', 'arma': '💀', 'dolor': '💀',
+        'miedo': '😨', 'temor': '😨', 'gritar': '😨', 'correr': '😨', 'oscuro': '😨',
+        'feliz': '😊', 'risa': '😊', 'sonreír': '😊', 'alegría': '😊',
+        'triste': '😢', 'llorar': '😢', 'lágrima': '😢', 'soledad': '😢',
+        'duda': '🤔', 'quizás': '🤔', 'pensar': '🤔', 'verdad': '🤔'
+    };
 
-    // Configuración del Servidor
-    const BACKEND_ENDPOINT = "/api/analisis-ia";
+    // 1. MANEJO DE ARCHIVOS (TXT, DOCX, PDF)
+    archivoInput.addEventListener('change', async (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
 
-    // =========================================================
-    // 2. BOTÓN 1: ESTADÍSTICAS RÁPIDAS (Frontend puro)
-    // =========================================================
-    analizarBtn.addEventListener('click', (e) => {
-        e.preventDefault();
-        console.log("🖱️ Botón presionado");
-
-        let guion = textoGuion.value.trim();
-
-        // PRUEBA DE VIDA: Si sale esta alerta, el botón funciona.
-        if (guion.length === 0) {
-            alert('⚠️ El campo está vacío. Por favor pega un guion.');
-            return;
-        }
+        textoGuion.value = "⏳ Leyendo archivo... esto puede tardar unos segundos.";
 
         try {
-            // Limpiar y Analizar
-            guion = limpiarTextoGuion(guion);
-            textoGuion.value = guion; // Actualizamos caja con texto limpio
+            let textoExtraido = "";
 
-            const analisis = analizarTextoGuion(guion, idiomaSelector.value);
-
-            // Mostrar
-            mostrarResultados(analisis);
-            resultadosSection.style.display = 'block';
-            resultadosSection.scrollIntoView({ behavior: 'smooth' });
-
-        } catch (error) {
-            alert("🚨 Error interno en JS: " + error.message);
-            console.error(error);
-        }
-    });
-
-    // =========================================================
-    // 3. BOTÓN 2: ANÁLISIS IA (Backend)
-    // =========================================================
-    generarAnalisisEmocionalBtn.addEventListener('click', async () => {
-        const guion = textoGuion.value.trim();
-        if (guion.length < 50) {
-            alert("El guion es muy corto para la IA.");
-            return;
-        }
-
-        // Mostrar feedback visual inmediato
-        resultadoEmocional.innerHTML = '<p style="color: blue;">🔄 Conectando con el cerebro de la IA... espera...</p>';
-
-        try {
-            // Re-analizamos para tener datos frescos
-            const analisis = analizarTextoGuion(guion, idiomaSelector.value);
-
-            const response = await fetch(BACKEND_ENDPOINT, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    guion: guion,
-                    analisisCuantitativo: analisis
-                })
-            });
-
-            const data = await response.json();
-
-            if (response.ok) {
-                resultadoEmocional.innerHTML = `<div class="feedback-box">${data.analysis}</div>`;
+            if (file.type === 'application/pdf') {
+                // Lógica PDF.js
+                const arrayBuffer = await file.arrayBuffer();
+                const pdf = await pdfjsLib.getDocument(arrayBuffer).promise;
+                for (let i = 1; i <= pdf.numPages; i++) {
+                    const page = await pdf.getPage(i);
+                    const textContent = await page.getTextContent();
+                    const pageText = textContent.items.map(item => item.str).join(" ");
+                    textoExtraido += pageText + "\n";
+                }
+            } else if (file.name.endsWith('.docx')) {
+                // Lógica Mammoth
+                const arrayBuffer = await file.arrayBuffer();
+                const result = await mammoth.extractRawText({ arrayBuffer });
+                textoExtraido = result.value;
             } else {
-                resultadoEmocional.innerHTML = `<p style="color: red;">❌ Error del servidor: ${data.error}</p>`;
+                // Lógica Texto Plano
+                textoExtraido = await file.text();
             }
+
+            textoGuion.value = textoExtraido;
+            console.log("✅ Archivo cargado con éxito.");
+
         } catch (error) {
-            resultadoEmocional.innerHTML = `<p style="color: red;">🔌 Error de conexión: ${error.message}</p>`;
+            console.error(error);
+            textoGuion.value = "❌ Error al leer el archivo. Asegúrate de que no esté dañado.";
+            alert("Error: " + error.message);
         }
     });
 
-    // =========================================================
-    // 4. FUNCIONES DE LÓGICA (Core)
-    // =========================================================
+    // 2. BOTÓN DE ANÁLISIS
+    analizarBtn.addEventListener('click', () => {
+        const guion = textoGuion.value.trim();
+        if (guion.length < 50) return alert("El texto es muy corto o está vacío.");
 
-    function limpiarTextoGuion(texto) {
-        return texto.replace(/\r\n|\r/g, '\n').replace(/[ ]{2,}/g, ' ').trim();
-    }
+        const resultados = procesarGuion(guion);
+        renderizarResultados(resultados);
+    });
 
-    function analizarTextoGuion(texto, idioma) {
-        // Listas de palabras ignoradas (Stopwords)
-        const stopwords = (idioma === 'en')
-            ? new Set(['the', 'a', 'and', 'of', 'to', 'in', 'is', 'you', 'that', 'it', 'he', 'was', 'for', 'on', 'are', 'with', 'as', 'i', 'his', 'they', 'be', 'at', 'one', 'have', 'this', 'from', 'or', 'had', 'by', 'not', 'word', 'but', 'what', 'some', 'we', 'can', 'out', 'other', 'were', 'all', 'there', 'when', 'up', 'use', 'your', 'how', 'said', 'an', 'each', 'she'])
-            : new Set(['el', 'la', 'los', 'las', 'un', 'una', 'unos', 'unas', 'y', 'e', 'o', 'u', 'de', 'del', 'a', 'al', 'en', 'con', 'por', 'para', 'sin', 'sobre', 'entre', 'tras', 'se', 'es', 'son', 'fue', 'era', 'mi', 'tu', 'su', 'nos', 'os', 'les', 'me', 'te', 'le', 'que', 'como', 'cuando', 'donde', 'quien', 'cual', 'si', 'no', 'lo', 'los', 'estoy', 'esta', 'estamos', 'estan', 'v.o.', 'cont.']);
+    // 3. LÓGICA DE PROCESAMIENTO (El "Motor")
+    function procesarGuion(texto) {
+        const lineas = texto.split(/\r?\n/);
+        const contPersonajes = {};
+        const contPalabras = {};
+        const contEmociones = {};
 
-        const lineas = texto.split('\n');
-        const frecuenciaPersonajes = {};
-        const frecuenciaPalabras = {};
+        // Palabras a ignorar (Stopwords mejoradas)
+        const stopwords = new Set([
+            'el', 'la', 'los', 'las', 'un', 'una', 'de', 'del', 'a', 'al', 'en', 'y', 'e', 'o', 'u',
+            'que', 'su', 'sus', 'por', 'para', 'con', 'se', 'lo', 'les', 'me', 'te', 'le', 'mi', 'tu',
+            'es', 'son', 'fue', 'era', 'está', 'están', 'hay', 'muy', 'más', 'pero', 'sin', 'sobre',
+            'este', 'esta', 'ese', 'eso', 'cuando', 'donde', 'como', 'porque', 'entonces', 'luego',
+            'si', 'no', 'ni', 'ya', 'ha', 'he', 'había', 'qué', 'sí', 'tú', 'él', 'ella', 'nos',
+            'ante', 'bajo', 'cabe', 'contra', 'desde', 'hacia', 'hasta', 'para', 'por', 'según',
+            'tras', 'durante', 'mediante', 'versus', 'vía', 'todo', 'nada', 'algo', 'esto', 'eso'
+        ]);
 
-        // --- AQUÍ ESTÁ LA CORRECCIÓN DE "ESCENA" ---
-        const blacklist = new Set(['EXT.', 'INT.', 'EXT', 'INT', 'DÍA', 'NOCHE', 'DAY', 'NIGHT', 'CUT TO', 'FADE IN', 'FADE OUT', 'ESCENA', 'TITULO', 'LOGLINE']);
+        // Palabras técnicas de guion (Blacklist)
+        const blacklistGuion = ['INT.', 'EXT.', 'INT', 'EXT', 'DÍA', 'NOCHE', 'DAY', 'NIGHT', 'CORTE', 'FADE', 'FIN', 'CONTINUA'];
 
         lineas.forEach((linea, index) => {
-            const lineaTrim = linea.trim();
-            if (!lineaTrim) return;
+            const lineaLimpia = linea.trim();
+            if (!lineaLimpia) return;
 
-            // Detectar Nombre (Mayúsculas puras)
-            // Lógica: Es mayúscula, tiene letras, y NO empieza con palabras técnicas
-            const primeraPalabra = lineaTrim.split(' ')[0].replace(/[^A-Z]/g, ''); // Solo letras mayusculas
-            const esMayuscula = (lineaTrim === lineaTrim.toUpperCase()) && /[A-Z]/.test(lineaTrim);
+            // --- A. DETECCIÓN DE PERSONAJES ---
+            // 1. Quitar acotaciones entre paréntesis: "JUAN (enojado)" -> "JUAN"
+            let posibleNombre = lineaLimpia.replace(/\s*\(.*?\)\s*/g, '').trim();
 
-            // CORRECCIÓN CLAVE: Usamos .some() para ver si empieza con palabra prohibida
-            const esTecnico = [...blacklist].some(term => lineaTrim.startsWith(term));
+            // 2. Validaciones: Mayúsculas, longitud razonable, no es palabra técnica
+            const esMayuscula = (posibleNombre === posibleNombre.toUpperCase()) && /[A-Z]/.test(posibleNombre);
+            const esTecnico = blacklistGuion.some(t => posibleNombre.startsWith(t));
+            const longitudOk = posibleNombre.length > 2 && posibleNombre.length < 40;
 
-            if (esMayuscula && !esTecnico && lineaTrim.length > 2 && lineaTrim.length < 40) {
-                // Verificamos si la siguiente línea parece diálogo (no vacía, no mayúscula técnica)
-                if (index + 1 < lineas.length) {
-                    const sig = lineas[index+1].trim();
-                    if (sig && sig !== sig.toUpperCase()) {
-                        const nombre = lineaTrim.split('(')[0].trim(); // Quitar acotaciones
-                        frecuenciaPersonajes[nombre] = (frecuenciaPersonajes[nombre] || 0) + 1;
+            if (esMayuscula && !esTecnico && longitudOk) {
+                // 3. Validación de Contexto: ¿La siguiente línea parece diálogo?
+                // Buscamos la siguiente línea con texto
+                let j = index + 1;
+                while (j < lineas.length && !lineas[j].trim()) j++;
+
+                if (j < lineas.length) {
+                    const sigLinea = lineas[j].trim();
+                    // Si la siguiente línea NO es mayúscula completa, asumimos que es diálogo y validamos el personaje
+                    if (sigLinea && sigLinea !== sigLinea.toUpperCase()) {
+                        contPersonajes[posibleNombre] = (contPersonajes[posibleNombre] || 0) + 1;
                     }
                 }
             }
 
-            // Conteo de palabras (simple)
+            // --- B. DETECCIÓN DE PALABRAS CLAVE Y EMOCIONES ---
             if (!esMayuscula && !esTecnico) {
-                const palabras = lineaTrim.toLowerCase().replace(/[.,!?;:()]/g, '').split(/\s+/);
+                // Tokenizar: minúsculas, quitar puntuación
+                const palabras = lineaLimpia.toLowerCase()
+                    .replace(/[.,¡!¿?;:"()\-]/g, '')
+                    .split(/\s+/);
+
                 palabras.forEach(p => {
-                    if (p.length > 3 && !stopwords.has(p)) {
-                        frecuenciaPalabras[p] = (frecuenciaPalabras[p] || 0) + 1;
+                    if (p.length > 3 && !stopwords.has(p) && isNaN(p)) {
+                        // Conteo General
+                        contPalabras[p] = (contPalabras[p] || 0) + 1;
+
+                        // Conteo Emocional (Busqueda parcial, ej: "amarlo" contiene "amar")
+                        for (const [raiz, icono] of Object.entries(diccionarioEmociones)) {
+                            if (p.includes(raiz)) {
+                                const key = `${raiz} ${icono}`; // Ej: "muerte 💀"
+                                contEmociones[key] = (contEmociones[key] || 0) + 1;
+                            }
+                        }
                     }
                 });
             }
         });
 
-        // Ordenar Resultados
-        const topPersonajes = Object.entries(frecuenciaPersonajes)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 5);
+        // Ordenar y cortar Tops
+        const topPersonajes = Object.entries(contPersonajes).sort((a,b) => b[1]-a[1]).slice(0, 8);
+        const topPalabras = Object.entries(contPalabras).sort((a,b) => b[1]-a[1]).slice(0, 10);
+        const topEmociones = Object.entries(contEmociones).sort((a,b) => b[1]-a[1]).slice(0, 6);
 
-        const topPalabras = Object.entries(frecuenciaPalabras)
-            .sort((a, b) => b[1] - a[1])
-            .slice(0, 8);
-
-        return { topPersonajes, topPalabras, oracionesClave: [], dialogosClave: [] };
+        return { topPersonajes, topPalabras, topEmociones };
     }
 
-    function mostrarResultados(analisis) {
-        const listaPersonajes = document.getElementById('lista-personajes');
-        const listaPalabras = document.getElementById('lista-palabras');
+    // 4. RENDERIZADO EN HTML
+    function renderizarResultados(datos) {
+        resultadosSection.style.display = 'block';
 
+        // Limpiar listas
         listaPersonajes.innerHTML = '';
         listaPalabras.innerHTML = '';
+        listaEmociones.innerHTML = '';
 
-        if (analisis.topPersonajes.length === 0) {
-            listaPersonajes.innerHTML = '<li style="color:orange">No detecté personajes. Asegúrate de usar MAYÚSCULAS para los nombres.</li>';
-        } else {
-            analisis.topPersonajes.forEach(([p, c]) => {
-                const li = document.createElement('li');
-                li.innerHTML = `<strong>${p}</strong> (${c} intervenciones)`;
-                listaPersonajes.appendChild(li);
-            });
-        }
-
-        analisis.topPalabras.forEach(([p, c]) => {
+        // Personajes
+        if (datos.topPersonajes.length === 0) listaPersonajes.innerHTML = '<li>⚠️ No se detectaron personajes claros.</li>';
+        datos.topPersonajes.forEach(([nombre, num]) => {
             const li = document.createElement('li');
-            li.textContent = `${p} (${c})`;
+            li.innerHTML = `<strong>${nombre}</strong> <small>(${num} intervenciones)</small>`;
+            listaPersonajes.appendChild(li);
+        });
+
+        // Palabras Clave
+        datos.topPalabras.forEach(([palabra, num]) => {
+            const li = document.createElement('li');
+            li.innerText = `${palabra} (${num})`;
             listaPalabras.appendChild(li);
         });
+
+        // Emociones
+        if (datos.topEmociones.length === 0) listaEmociones.innerHTML = '<li>Neutral / No detectado</li>';
+        datos.topEmociones.forEach(([emo, num]) => {
+            const li = document.createElement('li');
+            li.style.color = '#d32f2f';
+            li.innerText = `${emo} (${num})`;
+            listaEmociones.appendChild(li);
+        });
+
+        resultadosSection.scrollIntoView({ behavior: 'smooth' });
     }
 });

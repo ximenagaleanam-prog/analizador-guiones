@@ -18,9 +18,8 @@ document.addEventListener('DOMContentLoaded', () => {
     const listaDialogosClave = document.getElementById('lista-dialogos-clave');
 
     // =========================================================
-    // CONFIGURACIÓN DEL ENDPOINT (CORREGIDO)
+    // CONFIGURACIÓN DEL ENDPOINT
     // =========================================================
-    // Esta ruta coincide con la configuración de tu vercel.json actual
     const BACKEND_ENDPOINT = "/api/analisis-ia";
 
     // --- LISTAS DE STOPWORDS (Palabras a ignorar) ---
@@ -185,7 +184,11 @@ document.addEventListener('DOMContentLoaded', () => {
             // 1. Detección de Personaje
             const posibleNombre = lineaTrim.split('(')[0].trim().replace(/\^/g, ""); // Limpiar
             const esMayuscula = (posibleNombre === posibleNombre.toUpperCase()) && /[A-Z]/.test(posibleNombre);
-            const esTecnico = blacklist.has(posibleNombre) || lineaTrim.startsWith('INT.') || lineaTrim.startsWith('EXT.');
+
+            // CORRECCIÓN CLAVE: Usamos 'some' para ver si empieza con alguna palabra prohibida
+            const esTecnico = [...blacklist].some(termino => posibleNombre.startsWith(termino)) ||
+                lineaTrim.startsWith('INT.') ||
+                lineaTrim.startsWith('EXT.');
 
             if (esMayuscula && !esTecnico && posibleNombre.length > 1 && posibleNombre.length < 30) {
                 // Heurística: ¿La siguiente línea parece diálogo?

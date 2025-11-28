@@ -201,7 +201,7 @@ document.addEventListener('DOMContentLoaded', () => {
         const topEmociones = Object.entries(contEmociones).sort((a,b) => b[1]-a[1]).slice(0, 8);
 
         return { topPersonajes, topPalabras, topEmociones };
-    }git add .
+    }
 
     // 4. RENDERIZADO EN HTML
     function renderizarResultados(datos) {

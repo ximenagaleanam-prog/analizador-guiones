@@ -69,72 +69,113 @@ document.addEventListener('DOMContentLoaded', () => {
         renderizarResultados(resultados);
     });
 
-    // 3. LÓGICA DE PROCESAMIENTO (El "Motor")
+    // =========================================================
+    // 3. LÓGICA DE PROCESAMIENTO PULIDA (El "Motor")
+    // =========================================================
     function procesarGuion(texto) {
         const lineas = texto.split(/\r?\n/);
         const contPersonajes = {};
         const contPalabras = {};
         const contEmociones = {};
 
-        // Palabras a ignorar (Stopwords mejoradas)
+        // 1. DICCIONARIO DE EMOCIONES (Español + Inglés)
+        const diccionarioEmociones = {
+            // AMOR / POSITIVO
+            'amor': '❤️', 'love': '❤️', 'querer': '❤️', 'amar': '❤️', 'beso': '❤️', 'kiss': '❤️',
+            'feliz': '😊', 'happy': '😊', 'smile': '😊', 'sonrisa': '😊', 'risa': '😊', 'laugh': '😊',
+            'hope': '🌟', 'esperanza': '🌟', 'friend': '🤝', 'amigo': '🤝',
+
+            // MIEDO / TENSIÓN
+            'miedo': '😨', 'fear': '😨', 'scream': '😨', 'grito': '😨', 'run': '😨', 'correr': '😨',
+            'dark': '🌑', 'oscuro': '🌑', 'shadow': '🌑', 'sombra': '🌑', 'danger': '⚠️', 'peligro': '⚠️',
+
+            // TRISTEZA / DOLOR
+            'triste': '😢', 'sad': '😢', 'llorar': '😢', 'cry': '😢', 'tears': '😢', 'lágrimas': '😢',
+            'pain': '💔', 'dolor': '💔', 'hurt': '💔', 'herido': '💔', 'alone': '🥀', 'solo': '🥀',
+
+            // IRA / VIOLENCIA
+            'muerte': '💀', 'death': '💀', 'kill': '💀', 'matar': '💀', 'gun': '🔫', 'arma': '🔫',
+            'blood': '🩸', 'sangre': '🩸', 'fight': '👊', 'pelea': '👊', 'golpe': '👊', 'hit': '👊',
+            'angry': '😡', 'enojado': '😡', 'hate': '😡', 'odio': '😡'
+        };
+
+        // 2. LISTA MAESTRA DE PALABRAS IGNORADAS (Stopwords + Guionismo)
+        // Incluye conectores (ES/EN) y verbos de acción comunes en guiones que no son temas.
         const stopwords = new Set([
+            // ESPAÑOL
             'el', 'la', 'los', 'las', 'un', 'una', 'de', 'del', 'a', 'al', 'en', 'y', 'e', 'o', 'u',
             'que', 'su', 'sus', 'por', 'para', 'con', 'se', 'lo', 'les', 'me', 'te', 'le', 'mi', 'tu',
             'es', 'son', 'fue', 'era', 'está', 'están', 'hay', 'muy', 'más', 'pero', 'sin', 'sobre',
             'este', 'esta', 'ese', 'eso', 'cuando', 'donde', 'como', 'porque', 'entonces', 'luego',
             'si', 'no', 'ni', 'ya', 'ha', 'he', 'había', 'qué', 'sí', 'tú', 'él', 'ella', 'nos',
-            'ante', 'bajo', 'cabe', 'contra', 'desde', 'hacia', 'hasta', 'para', 'por', 'según',
-            'tras', 'durante', 'mediante', 'versus', 'vía', 'todo', 'nada', 'algo', 'esto', 'eso'
+            'yo', 'ellos', 'ellas', 'nosotros', 'usted', 'ustedes', 'mío', 'tuyo', 'suyo',
+
+            // INGLÉS (English) - CRUCIAL PARA TOY STORY
+            'the', 'a', 'an', 'and', 'or', 'but', 'if', 'of', 'at', 'by', 'for', 'with', 'about',
+            'against', 'between', 'into', 'through', 'during', 'before', 'after', 'above', 'below',
+            'to', 'from', 'up', 'down', 'in', 'out', 'on', 'off', 'over', 'under', 'again', 'further',
+            'then', 'once', 'here', 'there', 'when', 'where', 'why', 'how', 'all', 'any', 'both',
+            'each', 'few', 'more', 'most', 'other', 'some', 'such', 'no', 'nor', 'not', 'only',
+            'own', 'same', 'so', 'than', 'too', 'very', 'can', 'will', 'just', 'don', 'should', 'now',
+            'he', 'she', 'it', 'they', 'we', 'you', 'i', 'him', 'her', 'them', 'us', 'his', 'hers',
+            'their', 'theirs', 'myself', 'yourself', 'yours', 'mine', 'is', 'are', 'was', 'were',
+            'have', 'has', 'had', 'do', 'does', 'did', 'be', 'been', 'being', 'get', 'got',
+            'going', 'gonna', 'wanna', 'yeah', 'hey', 'okay', 'right', 'well', 'oh',
+
+            // TÉRMINOS TÉCNICOS DE GUION (Para que no salgan como temas)
+            'int', 'ext', 'day', 'night', 'dawn', 'dusk', 'cut', 'fade', 'dissolve', 'continuous',
+            'voice', 'over', 'os', 'pov', 'cu', 'ecu', 'ls', 'ms', 'cont', 'continued',
+            'looks', 'turns', 'walks', 'runs', 'sees', 'back', 'room', 'door', 'hand', 'head', 'eyes'
         ]);
 
-        // Palabras técnicas de guion (Blacklist)
-        const blacklistGuion = ['INT.', 'EXT.', 'INT', 'EXT', 'DÍA', 'NOCHE', 'DAY', 'NIGHT', 'CORTE', 'FADE', 'FIN', 'CONTINUA'];
+        const blacklistEncabezados = ['INT.', 'EXT.', 'INT', 'EXT', 'DÍA', 'NOCHE', 'DAY', 'NIGHT', 'CORTE', 'FADE', 'FIN'];
 
+        // --- PRIMER PASADA: PROCESAR LÍNEAS ---
         lineas.forEach((linea, index) => {
             const lineaLimpia = linea.trim();
             if (!lineaLimpia) return;
 
-            // --- A. DETECCIÓN DE PERSONAJES ---
-            // 1. Quitar acotaciones entre paréntesis: "JUAN (enojado)" -> "JUAN"
-            let posibleNombre = lineaLimpia.replace(/\s*\(.*?\)\s*/g, '').trim();
+            // A. DETECCIÓN DE PERSONAJES
+            // Limpieza: "WOODY (O.S.)" -> "WOODY"
+            let posibleNombre = lineaLimpia.replace(/\s*\(.*?\)\s*/g, '').replace(/[^a-zA-ZáéíóúñÁÉÍÓÚÑ ]/g, "").trim();
 
-            // 2. Validaciones: Mayúsculas, longitud razonable, no es palabra técnica
             const esMayuscula = (posibleNombre === posibleNombre.toUpperCase()) && /[A-Z]/.test(posibleNombre);
-            const esTecnico = blacklistGuion.some(t => posibleNombre.startsWith(t));
-            const longitudOk = posibleNombre.length > 2 && posibleNombre.length < 40;
+            const esTecnico = blacklistEncabezados.some(t => lineaLimpia.startsWith(t));
+            const longitudOk = posibleNombre.length > 2 && posibleNombre.length < 30;
 
             if (esMayuscula && !esTecnico && longitudOk) {
-                // 3. Validación de Contexto: ¿La siguiente línea parece diálogo?
-                // Buscamos la siguiente línea con texto
+                // Validación de contexto (mira la línea siguiente)
                 let j = index + 1;
-                while (j < lineas.length && !lineas[j].trim()) j++;
+                while (j < lineas.length && !lineas[j].trim()) j++; // saltar vacíos
 
                 if (j < lineas.length) {
                     const sigLinea = lineas[j].trim();
-                    // Si la siguiente línea NO es mayúscula completa, asumimos que es diálogo y validamos el personaje
+                    // Si lo que sigue NO es mayúscula (es diálogo), entonces esto era un personaje
                     if (sigLinea && sigLinea !== sigLinea.toUpperCase()) {
                         contPersonajes[posibleNombre] = (contPersonajes[posibleNombre] || 0) + 1;
                     }
                 }
             }
 
-            // --- B. DETECCIÓN DE PALABRAS CLAVE Y EMOCIONES ---
+            // B. DETECCIÓN DE PALABRAS (TEMAS Y EMOCIONES)
             if (!esMayuscula && !esTecnico) {
-                // Tokenizar: minúsculas, quitar puntuación
                 const palabras = lineaLimpia.toLowerCase()
-                    .replace(/[.,¡!¿?;:"()\-]/g, '')
+                    .replace(/[.,¡!¿?;:"()\-]/g, '') // Quitar puntuación
+                    .replace(/'s/g, '') // Quitar posesivos en inglés (Woody's -> Woody)
                     .split(/\s+/);
 
                 palabras.forEach(p => {
-                    if (p.length > 3 && !stopwords.has(p) && isNaN(p)) {
-                        // Conteo General
+                    if (p.length > 2 && !stopwords.has(p) && isNaN(p)) {
+                        // Conteo Temático
                         contPalabras[p] = (contPalabras[p] || 0) + 1;
 
-                        // Conteo Emocional (Busqueda parcial, ej: "amarlo" contiene "amar")
+                        // Conteo Emocional (Búsqueda parcial inteligente)
                         for (const [raiz, icono] of Object.entries(diccionarioEmociones)) {
+                            // Si la palabra contiene la raíz emocional (ej: "loving" tiene "love")
                             if (p.includes(raiz)) {
-                                const key = `${raiz} ${icono}`; // Ej: "muerte 💀"
+                                const key = `${raiz} ${icono}`;
                                 contEmociones[key] = (contEmociones[key] || 0) + 1;
+                                break; // Solo contar una emoción por palabra
                             }
                         }
                     }
@@ -142,13 +183,25 @@ document.addEventListener('DOMContentLoaded', () => {
             }
         });
 
-        // Ordenar y cortar Tops
-        const topPersonajes = Object.entries(contPersonajes).sort((a,b) => b[1]-a[1]).slice(0, 8);
-        const topPalabras = Object.entries(contPalabras).sort((a,b) => b[1]-a[1]).slice(0, 10);
-        const topEmociones = Object.entries(contEmociones).sort((a,b) => b[1]-a[1]).slice(0, 6);
+        // --- SEGUNDA PASADA: LIMPIEZA FINAL ---
+
+        // 1. Obtener nombres de personajes detectados (en minúsculas para comparar)
+        const nombresPersonajes = Object.keys(contPersonajes).map(n => n.toLowerCase());
+
+        // 2. Filtrar Palabras Clave: Eliminar si es un nombre de personaje o un número
+        const palabrasFiltradas = Object.entries(contPalabras).filter(([palabra, cantidad]) => {
+            // Si la palabra es igual a un personaje detectado (ej: "woody" == "woody"), la borramos de Temas
+            if (nombresPersonajes.includes(palabra)) return false;
+            return true;
+        });
+
+        // Ordenar Resultados
+        const topPersonajes = Object.entries(contPersonajes).sort((a,b) => b[1]-a[1]).slice(0, 10);
+        const topPalabras = palabrasFiltradas.sort((a,b) => b[1]-a[1]).slice(0, 10);
+        const topEmociones = Object.entries(contEmociones).sort((a,b) => b[1]-a[1]).slice(0, 8);
 
         return { topPersonajes, topPalabras, topEmociones };
-    }
+    }git add .
 
     // 4. RENDERIZADO EN HTML
     function renderizarResultados(datos) {
